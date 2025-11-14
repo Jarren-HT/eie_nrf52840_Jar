@@ -17,18 +17,23 @@ static inline bool btn4() { return BTN_check_clear_pressed(BTN3); }
 
 
 // prototypes
+static void s0_entry(void* o);
 static void s0_exit(void* o);
 static enum smf_state_result s0_run(void* o);
 
+static void s1_entry(void* o);
 static void s1_exit(void* o);
 static enum smf_state_result s1_run(void* o);
 
+static void s2_entry(void* o);
 static void s2_exit(void* o);
 static enum smf_state_result s2_run(void* o);
 
+static void s3_entry(void* o);
 static void s3_exit(void* o);
 static enum smf_state_result s3_run(void* o);
 
+static void s4_entry(void* o);
 static void s4_exit(void* o);
 static enum smf_state_result s4_run(void* o);
 
@@ -59,11 +64,11 @@ static state_object_t obj;
 
 // locals
 static const struct smf_state states[] = {
-    [s0] = SMF_CREATE_STATE(NULL, s0_run, s0_exit, NULL, NULL),
-    [s1] = SMF_CREATE_STATE(NULL, s1_run, s1_exit, NULL, NULL),
-    [s2] = SMF_CREATE_STATE(NULL, s2_run, s2_exit, NULL, NULL),
-    [s3] = SMF_CREATE_STATE(NULL, s3_run, s3_exit, NULL, NULL),
-    [s4] = SMF_CREATE_STATE(NULL, s4_run, s4_exit, NULL, NULL)
+    [s0] = SMF_CREATE_STATE(s0_entry, s0_run, s0_exit, NULL, NULL),
+    [s1] = SMF_CREATE_STATE(s1_entry, s1_run, s1_exit, NULL, NULL),
+    [s2] = SMF_CREATE_STATE(s2_entry, s2_run, s2_exit, NULL, NULL),
+    [s3] = SMF_CREATE_STATE(s3_entry, s3_run, s3_exit, NULL, NULL),
+    [s4] = SMF_CREATE_STATE(s4_entry, s4_run, s4_exit, NULL, NULL)
 };
 
 
@@ -79,6 +84,9 @@ int state_machine_run() {
 
 // states 
 // 0    |   all leds off
+static void s0_entry(void* o) {
+    printk("entering s0 | all leds off\n");
+}
 static enum smf_state_result s0_run(void* o) {
     LED_set(LED0, LED_OFF);
     LED_set(LED1, LED_OFF);
@@ -91,11 +99,14 @@ static enum smf_state_result s0_run(void* o) {
 }
 
 static void s0_exit(void* o) {
-    // none :)
+    printk("exiting s0\n");
 }
 
 
 // 1    |   blink led1 at 4hz
+static void s1_entry(void* o) {
+    printk("entering s1 | led1 blinking at 4hz\n");
+}
 static enum smf_state_result s1_run(void* o) {
     if (++obj.count >= 125) {
         obj.count = 0;
@@ -110,11 +121,15 @@ static enum smf_state_result s1_run(void* o) {
 }
 
 static void s1_exit(void* o) {
+    printk("exiting s1\n");
     LED_set(LED0, LED_OFF);
 }
 
 
 // 2 |  leds 1, 3 ON leds 2, 4 OFF
+static void s2_entry(void* o) {
+    printk("entering s2 | leds 1,3 ON 2,4 OFF\n");
+}
 static enum smf_state_result s2_run(void* o) {
     LED_set(LED0, LED_ON);
     LED_set(LED1, LED_OFF);
@@ -132,11 +147,14 @@ static enum smf_state_result s2_run(void* o) {
 }
 
 static void s2_exit(void* o) {
-    // none :)
+    printk("exiting s2\n");
 }
 
 
 // 3 |  leds 2, 4 ON leds 1, 3 OFF
+static void s3_entry(void* o) {
+    printk("entering s3 | leds 2,4 ON 1,3 OFF\n");
+}
 static enum smf_state_result s3_run(void* o) {
     LED_set(LED0, LED_OFF);
     LED_set(LED1, LED_ON);
@@ -154,11 +172,14 @@ static enum smf_state_result s3_run(void* o) {
 }
 
 static void s3_exit(void* o) {
-    // none :)
+    printk("exiting s3\n");
 }
 
 
-// 4    |   blink led1 at 16hz
+// 4    |   blink leds 1, 2, 3, 4 at 16hz
+static void s4_entry(void* o) {
+    printk("entering s4 | blink all leds at 16hz\n");
+}
 static enum smf_state_result s4_run(void* o) {
     if (++obj.count >= 31) {
         obj.count = 0;
@@ -174,6 +195,7 @@ static enum smf_state_result s4_run(void* o) {
 }
 
 static void s4_exit(void* o) {
+    printk("exiting s4\n");
     LED_set(LED0, LED_OFF);
     LED_set(LED1, LED_OFF);
     LED_set(LED2, LED_OFF);
