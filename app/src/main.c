@@ -19,15 +19,26 @@
 
 
 #define SLEEP_MS 1
+#define MAX_PASS_SIZE 16
+
+typedef enum {
+  ST_INIT,
+  ST_WAIT_SET_WINDOW,
+  ST_SET_PASSWORD,
+  ST_USE_DEFAULT,
+  ST_READY,
+  ST_INPUT_GUESS,
+  ST_CHECK_GUESS,
+  ST_UNLOCKED
+} state_t;
 
 // define default password params in case user doesn't input them
 static const uint8_t def_password[] = {4, 4, 2, 1, 4, 2}; // [1]
 uint8_t def_password_size = (sizeof(def_password) / sizeof(uint8_t));
 
-#define MAX_PASS_SIZE 16
-
 
 btn_id btns[] = {BTN0, BTN1, BTN2, BTN3};
+
 
 // gets bitmask of input!!!
 uint8_t get_state_mask(void) {
@@ -36,143 +47,126 @@ uint8_t get_state_mask(void) {
   for (int i = 0; i < 4; i++) {
     if (BTN_check_clear_pressed(btns[i])) mask |= (1 << i);
   }
-
   return mask;
-
 }
 
 
 int main(void) {
   if (0 > BTN_init() || 0 > LED_init()) return 0;
+  uint8_t password[MAX_PASS_SIZE];
+  uint8_t pass_len = 0;
 
   uint8_t in_stream[MAX_PASS_SIZE];
-  uint8_t i = 0;
-  uint8_t password[MAX_PASS_SIZE];
-  password[0] = 0;
+  uint8_t in_len = 0;
 
+  state_t state = ST_INIT;
 
+  uint16_t j = 0;
 
-  // Password Set
-  int j = 3000;
-  LED_set(LED3, LED_ON);
-  bool setup = true;
-
-  // j represents ms left, gives user 3 seconds to give a password
-  // breaks loop once user has put in a password
-  while (0 < j && password[0] == 0) {
-    
-    // if user hits btn3, it allows them to input their own password
-    uint8_t state = get_state_mask();
-    if (state == 0x08) {
-      LED_set(LED2, LED_ON);
-      while (setup && MAX_PASS_SIZE > i) {
-        k_msleep(SLEEP_MS);
-        state = get_state_mask();
-
-        switch (state) {
-
-          case 0x01: // btn0
-          case 0x02: // btn1
-          case 0x04: // btn2
-            // appends user input to password
-            password[i++] = state;
-            break;
-
-          case 0x08:
-            setup = false;
-            j = 0;
-            break;
-
-          default: 
-            break;
-
-        }
-      }
-      LED_set(LED2, LED_OFF);
-    }
-    // times for 3s :)
-    k_msleep(SLEEP_MS);
-    j--;
-  }
-  LED_set(LED3, LED_OFF);
-
-  uint8_t password_size;
-
-  if (password[0] == 0) {
-    password_size = def_password_size;
-    memcpy(password, def_password, def_password_size);
-  }
-  else 
-    password_size = i;
-
-  // prints the password.. probably not great if you... want to guess...
-  for (j = 0; j < password_size; j++) printk("%d", password[j]);
-  printk("\n");
-  
-
-
-  // Password... guess :)
-  i = 0;
-  bool lock = true;
-
-  LED_set(LED0, LED_ON);
-
-  while(1) {
-    uint8_t state = get_state_mask();
+  while (1) {
+    uint8_t b = get_state_mask();
 
     switch (state) {
-      case 0x01: // btn0
-      case 0x02: // btn1
-      case 0x04: // btn2
-        if (!lock) {
-          LED_set(LED0, LED_ON);
-          lock = true;
+
+      case ST_INIT:
+        LED_set(LED3, LED_ON);
+        j = 3000;
+        state = ST_WAIT_SET_WINDOW;
+        break;
+
+      case ST_WAIT_SET_WINDOW:
+        if (b == 8) {
+          LED_set(LED2, LED_ON);
+          pass_len = 0;
+          state = ST_SET_PASSWORD;
+        } else {
+          if (j == 0) {
+            state = ST_USE_DEFAULT;
+          } else {
+            j--;
+          }
         }
-        if (i < password_size) {
-          in_stream[i++] = state;
-          for (int j = 0; j < i; j++) printk("%d", in_stream[j]);
-          printk("\n");
+        break;
+
+      case ST_SET_PASSWORD:
+        if (b == 8) {
+          LED_set(LED2, LED_OFF);
+          LED_set(LED3, LED_OFF);
+          state = ST_READY;
           break;
         }
 
+        if (b == 1 || b == 2 || b == 4){
+          if (pass_len < MAX_PASS_SIZE) password[pass_len++] = b;
+        }
+        break;
+      
+      case ST_USE_DEFAULT:
+        memcpy(password, def_password, def_password_size);
+        pass_len = def_password_size;
+        LED_set(LED3, LED_OFF);
+        state = ST_READY;
+        break;
 
-      case 0x08: // btn3
-        if (!lock) {
-            LED_set(LED0, LED_ON);
-            lock = true;
-          }
+      case ST_READY:
+        printk("password: ");
+        for (j = 0; j < pass_len; j++) printk("%d", password[j]);
+        printk("\n");
+
+        LED_set(LED0, LED_ON);
+        in_len = 0;
+        state = ST_INPUT_GUESS;
+        break;
+
+      case ST_INPUT_GUESS:
+        if (b == 1 || b == 2 || b == 4) {
+          in_stream[in_len++] = b;
+          printk("%d", b);
+        } else if (b == 8) {
+          state = ST_CHECK_GUESS;
+          printk("\n");
+        }
+        break;
+
+      case ST_CHECK_GUESS:
         bool correct = true;
 
-        if (i != password_size) correct = false;
+        if (in_len != pass_len) correct = false;
         else {
-          for (int j = 0; j < password_size; j++) {
-            if (in_stream[j] != password[j]) {
+          for (j = 0; j < in_len; j++) {
+            if (password[j] != in_stream[j]) {
               correct = false;
               break;
             }
+          }
         }
-
-        }
+          
         
+          printk("%s\n", correct ? "Correct!" : "Incorrect!");
 
-        printk("%s\n", correct ? "Correct!" : "Incorrect!");
+          if (correct) {
+            LED_set(LED0, LED_OFF);
+            state = ST_UNLOCKED;
+          } else {
+            in_len = 0;
+            state = ST_INPUT_GUESS;
+          }
+        break;
 
-        memset(in_stream, 0, sizeof(in_stream));
-        i = 0;
-
-        if (correct) {
-          LED_set(LED0, LED_OFF);
-          lock = false;
+      case ST_UNLOCKED:
+        if (b != 0) {
+          LED_set(LED0, LED_ON);
+          in_len = 0;
+          state = ST_INPUT_GUESS;
         }
         break;
+     }
+     k_msleep(SLEEP_MS);
 
-      default:
-        break;
-    }
-
-    k_msleep(SLEEP_MS);
   }
-	return 0;
+
+  return 0;
+
 }
 
 /*
